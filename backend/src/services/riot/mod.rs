@@ -10,6 +10,16 @@ pub struct RiotService {
 #[derive(Debug)]
 #[allow(dead_code)]
 pub enum Region {
+    AMERICAS,
+    EUROPE,
+    ASIA,
+    ESPORTS,
+    SEA,
+}
+
+#[derive(Debug)]
+#[allow(dead_code)]
+pub enum Server {
     EUW1,
     BR1,
     EUN1,
@@ -26,11 +36,7 @@ pub enum Region {
     TR1,
     TW2,
     VN2,
-    AMERICAS,
-    EUROPE,
-    ASIA,
-    ESPORTS,
-}
+ }
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -57,6 +63,12 @@ impl std::fmt::Display for Region {
     }
 }
 
+impl std::fmt::Display for Server {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
 impl RiotService {
     pub fn new(api_key: String) -> Self {
         let mut headers = HeaderMap::new();
@@ -70,21 +82,16 @@ impl RiotService {
 
     pub async fn get_puuid_from_riot_id(&self, game_name: &str, tag_line: &str, region: Region) -> Result<String, reqwest::Error> {
         let endpoint = format!("/riot/account/v1/accounts/by-riot-id/{}/{}", game_name, tag_line);
-        println!("url: {}", endpoint);
         let url = utils::create_url(region, endpoint);
-        let request = self.http_client.get(url);
 
-        let puuid = request.send()
-            .await?.json::<AccountResponse>().await?.puuid;
-
-        println!("{}", puuid);
+        let puuid = utils::request::<AccountResponse>(url, &self.http_client).await?.puuid;
 
         Ok(puuid)
    }
 
-    pub async fn get_summoner_from_puuid(&self, puuid: &str, region: Region) -> Result<SummonerResponse, reqwest::Error> {
+    pub async fn get_summoner_from_puuid(&self, puuid: &str, server: Server) -> Result<SummonerResponse, reqwest::Error> {
         let endpoint = format!("/lol/summoner/v4/summoners/by-puuid/{}", puuid);
-        let url = utils::create_url(region, endpoint);
+        let url = utils::create_url(server, endpoint);
 
         let summoner_res = utils::request::<SummonerResponse>(url, &self.http_client).await?;
 
@@ -92,28 +99,23 @@ impl RiotService {
  
     }
 
-    pub async fn get_match_ids_from_puuid(&self, puuid: &str, region: Region, amount: i32, page: i32) -> Result<Vec<String>, reqwest::Error>{
+    pub async fn get_match_ids_from_puuid(&self, puuid: &str, region: &Region, amount: i32, page: i32) -> Result<Vec<String>, reqwest::Error>{
         let start = page * amount;
         let endpoint = format!("/lol/match/v5/matches/by-puuid/{}/ids?start={}&count={}", puuid, start, amount);
 
         let url = utils::create_url(region, endpoint);
 
-        let request = self.http_client.get(url);
-
-        let match_ids = request.send()
-            .await?.json::<Vec<String>>().await?;
-
+        let match_ids = utils::request(url, &self.http_client).await?;
+        
         Ok(match_ids)
     }
 
-    pub async fn get_match_from_id(&self, id: String, region: Region) -> Result<rocket::serde::json::Value, reqwest::Error> {
+    pub async fn get_match_from_id(&self, id: String, region: &Region) -> Result<rocket::serde::json::Value, reqwest::Error> {
         let endpoint = format!("/lol/match/v5/matches/{}", id);
         let url = utils::create_url(region, endpoint);
 
-        let request = self.http_client.get(url);
 
-        let match_res = request.send()
-            .await?.json::<rocket::serde::json::Value>().await?;
+        let match_res = utils::request::<rocket::serde::json::Value>(url, &self.http_client).await?;
 
         Ok(match_res)
     }
